@@ -1,16 +1,12 @@
 package main
 
 import (
-	//"io"
 	"net/http"
-	//"os
-	"sync"
 	"fmt"
+	"context"
 )
 
 func main() {
-	var wg sync.WaitGroup
-
 	sites := []string {
 		"https://www.google.com",
 		"https://drive.google.com",
@@ -19,22 +15,36 @@ func main() {
 		"https://hangouts.google.com",
 	}
 
-	for index, site := range sites {
-		wg.Add(1)
+	result := make(chan bool)
+	ctx, cancel := context.WithCancel(context.Background())
 
-		go func(index int, site string) {
-			defer wg.Done()
+        for index, site := range sites {
+		fmt.Print(index + 1, ". ", site)
 
-			res, err := http.Get(site)
+		go check_site(ctx, result, site)
+		status := <-result
 
-			if err == nil {
-				//io.WriteString(os.Stdout, res.Status + "\n")
-				fmt.Println(index, "-", site, "->", res.Status)
-			} else {
-				fmt.Println(index, "-", site, "->", err)
-			}
-		}(index, site)
+		if status == false {
+			fmt.Println("\nAborted!")
+			break
+		}
 	}
 
-	wg.Wait()
+	cancel()
+}
+
+func check_site (ctx context.Context, result chan<- bool, site string) {
+	res, err := http.Get(site)
+	status := (err == nil)
+
+	if status {
+		fmt.Println(" ->", res.Status)
+	} else {
+		fmt.Println(" ->", err)
+	}
+
+	select {
+		case result <- status:
+			return
+	}
 }
